@@ -27,6 +27,7 @@ private:
 	sqlite3* db;
 	char* err;
 	int fail;
+	bool flag = false;
 public:
 	void stopDrone(int id);
 	void addDrone(int id);
@@ -108,7 +109,7 @@ static int callback(void* data, int argc, char** argv, char** azColName) {
 	for (int i = 0; i < argc; i++) {
 		std::cout << azColName[i] << ": " << (argv[i] ? argv[i] : "NULL") << "\n";
 	}
-	std::cout << "\n";
+	std::cout << "\n\n";
 	return 0;
 }
 
@@ -177,7 +178,7 @@ void Drones::addDrone(int id) {
 			std::cout << "Waiting connection...\n";
 			SOCKET newDrone;
 			if ((newDrone = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&addrlen)) == INVALID_SOCKET) {
-				std::cerr << "Accept failed with error: " << WSAGetLastError() << "\n";
+				std::cerr << "Accept failed with error: " << WSAGetLastError() << "\n\n";
 				closesocket(server_fd);
 				WSACleanup();
 				return;
@@ -185,18 +186,19 @@ void Drones::addDrone(int id) {
 
 			drns[id] = newDrone;
 			std::string sql("INSERT INTO drones(ID, Status, First, Second) VALUES(" + std::to_string(id) +
-				", 'Free', " + std::to_string(360 - 360 / (countWorkingDrones() + 1)) + ", " + std::to_string(360) + ");");
+				", 'Free', " + "0" + ", " + "0" + ");");
 
 			fail = sqlite3_exec(db, sql.c_str(), NULL, 0, &err);
 			if (fail != SQLITE_OK) {
-				std::cerr << "Error INSERT\n";
+				std::cerr << "Error INSERT\n\n";
 				sqlite3_free(err);
 				return;
 			}
-			std::cout << "Drone successfully added\n";
+			std::cout << "Drone successfully added\n\n";
+			flag = true;
 		}
 		else
-			std::cout << "Drone's already been added\n";
+			std::cout << "Drone's already been added\n\n";
 		});
 }
 
@@ -204,18 +206,18 @@ void Drones::addDrone(int id) {
 void Drones::launchDrone(int id) {
 	threads.emplace_back([&, id]() {
 		if (droneCheck(id) && statusCheck(id)) {
-			std::cout << "Drone is busy now\n";
+			std::cout << "Drone is busy now\n\n";
 			return;
 		}
 		if (!droneCheck(id)) {
-			std::cout << "Drone's not found\n";
+			std::cout << "Drone's not found\n\n";
 			return;
 		}
 
 		std::string sql = "UPDATE drones SET Status = 'Working' WHERE ID = " + std::to_string(id) + ";";
 		fail = sqlite3_exec(db, sql.c_str(), NULL, 0, &err);
 		if (fail != SQLITE_OK) {
-			std::cerr << "Error UPDATE\n";
+			std::cerr << "Error UPDATE\n\n";
 			sqlite3_free(err);
 			return;
 		}
@@ -246,18 +248,18 @@ void Drones::launchDrone(int id) {
 				i++;
 			}
 		}
-		printf("The drone %d is getting to work\n", id);
+		printf("The drone %d is getting to work\n\n", id);
 		});
 }
 
 void Drones::stopDrone(int id) {
 	threads.emplace_back([&, id]() {
 		if (!droneCheck(id)) {
-			std::cout << "Drone's not found\n";
+			std::cout << "Drone's not found\n\n";
 			return;
 		}
 		if (!statusCheck(id)) {
-			std::cout << "Drone is free now\n";
+			std::cout << "Drone is free now\n\n";
 			return;
 		}
 		std::string sql("UPDATE drones SET Status = 'Free' WHERE ID = " + std::to_string(id) + ";");
@@ -265,21 +267,21 @@ void Drones::stopDrone(int id) {
 		std::string sql2("UPDATE drones SET Second = '0' WHERE ID = " + std::to_string(id) + ";");
 		fail = sqlite3_exec(db, sql.c_str(), NULL, 0, &err);
 		if (fail != SQLITE_OK) {
-			std::cerr << "Error STOP\n";
+			std::cerr << "Error STOP\n\n";
 			sqlite3_free(err);
 			return;
 		}
 
 		fail = sqlite3_exec(db, sql1.c_str(), NULL, 0, &err);
 		if (fail != SQLITE_OK) {
-			std::cerr << "Error STOP\n";
+			std::cerr << "Error STOP\n\n";
 			sqlite3_free(err);
 			return;
 		}
 
 		fail = sqlite3_exec(db, sql2.c_str(), NULL, 0, &err);
 		if (fail != SQLITE_OK) {
-			std::cerr << "Error STOP\n";
+			std::cerr << "Error STOP\n\n";
 			sqlite3_free(err);
 			return;
 		}
@@ -288,7 +290,7 @@ void Drones::stopDrone(int id) {
 			std::lock_guard<std::mutex> lock(sendMutex);
 			send(drns[id], message.c_str(), strlen(message.c_str()), 0);
 		}
-		printf("The drone %d has finished its work\n", id);
+		printf("The drone %d has finished its work\n\n", id);
 		if (countWorkingDrones() == 0)
 			return;
 		double one = 360.0 / countWorkingDrones(), i = 0;
@@ -300,13 +302,13 @@ void Drones::stopDrone(int id) {
 
 				fail = sqlite3_exec(db, sql2.c_str(), 0, 0, &err);
 				if (fail != SQLITE_OK) {
-					std::cerr << "Error UPDATE2\n";
+					std::cerr << "Error UPDATE2\n\n";
 					sqlite3_free(err);
 				}
 
 				fail = sqlite3_exec(db, sql3.c_str(), 0, 0, &err);
 				if (fail != SQLITE_OK) {
-					std::cerr << "Error UPDATE3\n";
+					std::cerr << "Error UPDATE3\n\n";
 					sqlite3_free(err);
 				}
 				{
@@ -322,19 +324,27 @@ void Drones::stopDrone(int id) {
 }
 
 void Drones::allDronesInfo() {
+	if (!flag) {
+		std::cout << "No drones\n\n";
+		return;
+	}
 	std::string sql("SELECT * FROM drones;");
 	fail = sqlite3_exec(db, sql.c_str(), callback, NULL, &err);
 	if (fail != SQLITE_OK) {
-		std::cerr << "Error INFO\n";
+		std::cerr << "Error INFO\n\n";
 		sqlite3_free(err);
 	}
 }
 
 void Drones::droneInfo(int id) {
+	if (!droneCheck(id)) {
+		std::cout << "Drone's not found\n\n";
+		return;
+	}
 	std::string sql("SELECT * FROM DRONES WHERE ID = " + std::to_string(id) + ";");
 	fail = sqlite3_exec(db, sql.c_str(), callback, NULL, &err);
 	if (fail != SQLITE_OK) {
-		std::cerr << "Error INFO\n";
+		std::cerr << "Error INFO\n\n";
 		sqlite3_free(err);
 	}
 }
@@ -382,7 +392,6 @@ void Drones::startServer() {
 			continue;
 		}
 		if (message.substr(0, 3) == "All") {
-			if (countWorkingDrones()) std::cout << "DRONES INFO\n";
 			allDronesInfo();
 			continue;
 		}
@@ -397,7 +406,7 @@ void Drones::startServer() {
 			droneInfo(std::stoi(id));
 			continue;
 		}
-		std::cout << "Invalid input\n";
+		std::cout << "Invalid input\n\n";
 	}
 }
 
